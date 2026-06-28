@@ -1,10 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert, TextInput } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert, TextInput, Image, ScrollView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Wallet, Trash2 } from 'lucide-react-native';
+import { Plus, Wallet, Trash2, CheckCircle2 } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+
+const BANK_PROVIDERS = [
+  { code: 'bca.co.id', name: 'BCA' },
+  { code: 'bankmandiri.co.id', name: 'Mandiri' },
+  { code: 'bni.co.id', name: 'BNI' },
+  { code: 'bri.co.id', name: 'BRI' },
+  { code: 'jago.com', name: 'Bank Jago' },
+  { code: 'seabank.co.id', name: 'SeaBank' },
+];
+
+const EWALLET_PROVIDERS = [
+  { code: 'gojek.com', name: 'GoPay' },
+  { code: 'ovo.id', name: 'OVO' },
+  { code: 'dana.id', name: 'DANA' },
+  { code: 'shopee.co.id', name: 'ShopeePay' },
+  { code: 'linkaja.id', name: 'LinkAja' },
+];
 
 export default function AccountsScreen() {
   const { user } = useAuth();
@@ -16,6 +33,7 @@ export default function AccountsScreen() {
   const [isAdding, setIsAdding] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
   const [newAccountType, setNewAccountType] = useState('bank'); // bank, ewallet, cash
+  const [selectedProvider, setSelectedProvider] = useState('');
 
   useEffect(() => {
     fetchAccounts();
@@ -38,6 +56,11 @@ export default function AccountsScreen() {
     }
   };
 
+  const handleProviderSelect = (provider: any) => {
+    setSelectedProvider(provider.code);
+    setNewAccountName(provider.name);
+  };
+
   const handleAddAccount = async () => {
     if (!newAccountName.trim()) {
       Alert.alert('Validation Error', 'Account name is required');
@@ -49,11 +72,13 @@ export default function AccountsScreen() {
         user_id: user?.id,
         name: newAccountName,
         type: newAccountType,
+        provider_code: selectedProvider || null,
         current_balance: 0,
       });
       if (error) throw error;
       
       setNewAccountName('');
+      setSelectedProvider('');
       setIsAdding(false);
       fetchAccounts();
     } catch (error: any) {
@@ -86,6 +111,35 @@ export default function AccountsScreen() {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
   };
 
+  const renderProviderSelector = () => {
+    if (newAccountType === 'cash') return null;
+    
+    const providers = newAccountType === 'bank' ? BANK_PROVIDERS : EWALLET_PROVIDERS;
+    
+    return (
+      <View style={styles.providerContainer}>
+        <Text style={styles.label}>Select Provider</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.providerScroll}>
+          {providers.map((p) => (
+            <TouchableOpacity 
+              key={p.code} 
+              style={[styles.providerCard, selectedProvider === p.code && styles.providerCardActive]}
+              onPress={() => handleProviderSelect(p)}
+            >
+              <Image source={{ uri: `https://logo.clearbit.com/${p.code}` }} style={styles.providerImage} />
+              <Text style={styles.providerName}>{p.name}</Text>
+              {selectedProvider === p.code && (
+                <View style={styles.checkIcon}>
+                  <CheckCircle2 size={16} color="#2563eb" />
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -100,20 +154,17 @@ export default function AccountsScreen() {
 
       {isAdding && (
         <View style={styles.addForm}>
-          <Text style={styles.label}>Account Name</Text>
-          <TextInput
-            style={styles.input}
-            value={newAccountName}
-            onChangeText={setNewAccountName}
-            placeholder="e.g. BCA, OVO, Cash Wallet"
-          />
           <Text style={styles.label}>Type</Text>
           <View style={styles.typeSelector}>
             {['bank', 'ewallet', 'cash'].map((type) => (
               <TouchableOpacity
                 key={type}
                 style={[styles.typeButton, newAccountType === type && styles.typeButtonActive]}
-                onPress={() => setNewAccountType(type)}
+                onPress={() => {
+                  setNewAccountType(type);
+                  setSelectedProvider('');
+                  setNewAccountName(type === 'cash' ? 'Cash Wallet' : '');
+                }}
               >
                 <Text style={[styles.typeButtonText, newAccountType === type && styles.typeButtonTextActive]}>
                   {type.toUpperCase()}
@@ -121,6 +172,17 @@ export default function AccountsScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          
+          {renderProviderSelector()}
+
+          <Text style={styles.label}>Account Name</Text>
+          <TextInput
+            style={styles.input}
+            value={newAccountName}
+            onChangeText={setNewAccountName}
+            placeholder="e.g. BCA, OVO, Cash Wallet"
+          />
+          
           <TouchableOpacity style={styles.submitButton} onPress={handleAddAccount}>
             <Text style={styles.submitButtonText}>Save Account</Text>
           </TouchableOpacity>
@@ -138,7 +200,11 @@ export default function AccountsScreen() {
             <View style={styles.accountCard}>
               <View style={styles.accountInfo}>
                 <View style={styles.iconContainer}>
-                  <Wallet color="#2563eb" size={24} />
+                  {item.provider_code ? (
+                     <Image source={{ uri: `https://logo.clearbit.com/${item.provider_code}` }} style={styles.accountLogo} />
+                  ) : (
+                     <Wallet color="#2563eb" size={24} />
+                  )}
                 </View>
                 <View>
                   <Text style={styles.accountName}>{item.name}</Text>
@@ -217,7 +283,7 @@ const styles = StyleSheet.create({
   typeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   typeButton: {
     flex: 1,
@@ -239,6 +305,45 @@ const styles = StyleSheet.create({
   },
   typeButtonTextActive: {
     color: '#2563eb',
+  },
+  providerContainer: {
+    marginBottom: 16,
+  },
+  providerScroll: {
+    flexDirection: 'row',
+    paddingBottom: 8,
+  },
+  providerCard: {
+    backgroundColor: '#f8fafc',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 12,
+    marginRight: 12,
+    alignItems: 'center',
+    width: 80,
+    height: 90,
+  },
+  providerCardActive: {
+    borderColor: '#2563eb',
+    backgroundColor: '#eff6ff',
+  },
+  providerImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginBottom: 8,
+  },
+  providerName: {
+    fontSize: 10,
+    fontWeight: '600',
+    textAlign: 'center',
+    color: '#334155',
+  },
+  checkIcon: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
   },
   submitButton: {
     backgroundColor: '#2563eb',
@@ -276,6 +381,13 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  accountLogo: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   accountName: {
     fontSize: 16,

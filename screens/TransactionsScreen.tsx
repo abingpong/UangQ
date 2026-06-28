@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert, TextInput, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, Alert, TextInput, ScrollView, Image } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle } from 'lucide-react-native';
+import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Calendar, Wallet } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 
 export default function TransactionsScreen() {
@@ -18,6 +18,7 @@ export default function TransactionsScreen() {
   const [isAdding, setIsAdding] = useState(false);
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
+  const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [type, setType] = useState('expense'); // expense or income
@@ -75,7 +76,7 @@ export default function TransactionsScreen() {
         account_id: selectedAccountId,
         category_id: catId || null,
         amount: numAmount,
-        transaction_date: new Date().toISOString(),
+        transaction_date: new Date(txDate).toISOString(),
         notes: notes,
       });
       if (error) throw error;
@@ -92,6 +93,7 @@ export default function TransactionsScreen() {
 
       setAmount('');
       setNotes('');
+      setTxDate(new Date().toISOString().split('T')[0]);
       setIsAdding(false);
       fetchData();
     } catch (error: any) {
@@ -146,71 +148,93 @@ export default function TransactionsScreen() {
       </View>
 
       {isAdding && (
-        <View style={styles.addForm}>
-          <View style={styles.typeSelector}>
-            <TouchableOpacity
-              style={[styles.typeButton, type === 'expense' && styles.typeButtonExpenseActive]}
-              onPress={() => setType('expense')}
-            >
-              <Text style={[styles.typeButtonText, type === 'expense' && { color: '#ef4444' }]}>Expense</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.typeButton, type === 'income' && styles.typeButtonIncomeActive]}
-              onPress={() => setType('income')}
-            >
-              <Text style={[styles.typeButtonText, type === 'income' && { color: '#10b981' }]}>Income</Text>
+        <ScrollView style={styles.addFormScrollView} keyboardShouldPersistTaps="handled">
+          <View style={styles.addForm}>
+            <View style={styles.typeSelector}>
+              <TouchableOpacity
+                style={[styles.typeButton, type === 'expense' && styles.typeButtonExpenseActive]}
+                onPress={() => setType('expense')}
+              >
+                <Text style={[styles.typeButtonText, type === 'expense' && { color: '#ef4444' }]}>Pengeluaran</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.typeButton, type === 'income' && styles.typeButtonIncomeActive]}
+                onPress={() => setType('income')}
+              >
+                <Text style={[styles.typeButtonText, type === 'income' && { color: '#10b981' }]}>Pemasukan</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
+            <View style={styles.dateContainer}>
+              <Calendar color="#64748b" size={20} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.dateInput}
+                value={txDate}
+                onChangeText={setTxDate}
+                placeholder="2023-12-31"
+              />
+            </View>
+
+            <Text style={styles.label}>Nominal (Rp)</Text>
+            <TextInput
+              style={styles.input}
+              value={amount}
+              onChangeText={setAmount}
+              placeholder="Contoh: 50000"
+              keyboardType="numeric"
+            />
+            
+            <Text style={styles.label}>Kategori</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
+              {filteredCategories.map(cat => (
+                <TouchableOpacity 
+                  key={cat.id} 
+                  style={[styles.catChip, selectedCategoryId === cat.id && styles.catChipActive]}
+                  onPress={() => setSelectedCategoryId(cat.id)}
+                >
+                  <Text style={styles.catIcon}>{cat.icon || '📌'}</Text>
+                  <Text style={[styles.chipText, selectedCategoryId === cat.id && styles.chipTextActive]}>{cat.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.label}>Sumber Dana</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
+              {accounts.map(acc => (
+                <TouchableOpacity 
+                  key={acc.id} 
+                  style={[styles.accountChip, selectedAccountId === acc.id && styles.accountChipActive]}
+                  onPress={() => setSelectedAccountId(acc.id)}
+                >
+                  {acc.provider_code ? (
+                    <Image source={{ uri: `https://logo.clearbit.com/${acc.provider_code}` }} style={styles.accountLogo} />
+                  ) : (
+                    <Wallet size={16} color={selectedAccountId === acc.id ? "#2563eb" : "#64748b"} style={{marginRight: 6}} />
+                  )}
+                  <Text style={[styles.chipText, selectedAccountId === acc.id && styles.chipTextActive]}>{acc.name}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.label}>Keterangan Tambahan</Text>
+            <TextInput
+              style={styles.input}
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Contoh: Makan siang bareng teman"
+            />
+
+            <TouchableOpacity style={styles.submitButton} onPress={handleAddTransaction}>
+              <Text style={styles.submitButtonText}>Simpan Transaksi</Text>
             </TouchableOpacity>
           </View>
-
-          <TextInput
-            style={styles.input}
-            value={amount}
-            onChangeText={setAmount}
-            placeholder="Amount"
-            keyboardType="numeric"
-          />
-          <TextInput
-            style={styles.input}
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Notes (e.g. Lunch)"
-          />
-          
-          <Text style={styles.label}>Account</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
-            {accounts.map(acc => (
-              <TouchableOpacity 
-                key={acc.id} 
-                style={[styles.chip, selectedAccountId === acc.id && styles.chipActive]}
-                onPress={() => setSelectedAccountId(acc.id)}
-              >
-                <Text style={[styles.chipText, selectedAccountId === acc.id && styles.chipTextActive]}>{acc.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <Text style={styles.label}>Category</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
-            {filteredCategories.map(cat => (
-              <TouchableOpacity 
-                key={cat.id} 
-                style={[styles.chip, selectedCategoryId === cat.id && styles.chipActive]}
-                onPress={() => setSelectedCategoryId(cat.id)}
-              >
-                <Text style={[styles.chipText, selectedCategoryId === cat.id && styles.chipTextActive]}>{cat.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          <TouchableOpacity style={styles.submitButton} onPress={handleAddTransaction}>
-            <Text style={styles.submitButtonText}>Save Transaction</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       )}
 
       {loading && !isAdding ? (
         <ActivityIndicator color="#2563eb" style={{ marginTop: 24 }} />
-      ) : (
+      ) : !isAdding && (
         <FlatList
           data={transactions}
           keyExtractor={(item) => item.id}
@@ -221,11 +245,20 @@ export default function TransactionsScreen() {
               <View style={styles.txCard}>
                 <View style={styles.txInfo}>
                   <View style={[styles.iconContainer, { backgroundColor: isIncome ? '#d1fae5' : '#fee2e2' }]}>
-                    {isIncome ? <ArrowDownCircle color="#10b981" size={24} /> : <ArrowUpCircle color="#ef4444" size={24} />}
+                    {item.categories?.icon ? (
+                      <Text style={{fontSize: 24}}>{item.categories.icon}</Text>
+                    ) : (
+                      isIncome ? <ArrowDownCircle color="#10b981" size={24} /> : <ArrowUpCircle color="#ef4444" size={24} />
+                    )}
                   </View>
                   <View>
                     <Text style={styles.txNotes}>{item.notes || item.categories?.name || 'Transaction'}</Text>
-                    <Text style={styles.txDetails}>{item.accounts?.name} • {new Date(item.transaction_date).toLocaleDateString()}</Text>
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4}}>
+                      {item.accounts?.provider_code ? (
+                        <Image source={{ uri: `https://logo.clearbit.com/${item.accounts.provider_code}` }} style={styles.smallLogo} />
+                      ) : null}
+                      <Text style={styles.txDetails}>{item.accounts?.name} • {new Date(item.transaction_date).toLocaleDateString()}</Text>
+                    </View>
                   </View>
                 </View>
                 <View style={styles.txRight}>
@@ -241,7 +274,7 @@ export default function TransactionsScreen() {
           }}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No transactions found.</Text>
+              <Text style={styles.emptyStateText}>Belum ada transaksi.</Text>
             </View>
           }
         />
@@ -257,6 +290,7 @@ const styles = StyleSheet.create({
   backButtonText: { color: '#64748b', fontWeight: '600' },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
   addButton: { padding: 8 },
+  addFormScrollView: { maxHeight: '100%' },
   addForm: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   typeSelector: { flexDirection: 'row', marginBottom: 16 },
   typeButton: { flex: 1, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, alignItems: 'center', marginHorizontal: 4 },
@@ -264,20 +298,27 @@ const styles = StyleSheet.create({
   typeButtonIncomeActive: { backgroundColor: '#d1fae5', borderColor: '#10b981' },
   typeButtonText: { fontWeight: '600', color: '#64748b' },
   input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 12, borderRadius: 8, marginBottom: 16 },
+  dateContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, borderRadius: 8, marginBottom: 16 },
+  dateInput: { flex: 1, paddingVertical: 12 },
   label: { fontSize: 14, fontWeight: '500', color: '#334155', marginBottom: 8 },
-  scrollSelector: { marginBottom: 16, flexDirection: 'row' },
-  chip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#f1f5f9', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  chipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
+  scrollSelector: { marginBottom: 20, flexDirection: 'row', paddingBottom: 4 },
+  catChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#f8fafc', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  catChipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
+  catIcon: { fontSize: 16, marginRight: 6 },
+  accountChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#f8fafc', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
+  accountChipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
+  accountLogo: { width: 16, height: 16, borderRadius: 8, marginRight: 6 },
   chipText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
   chipTextActive: { color: '#2563eb' },
-  submitButton: { backgroundColor: '#2563eb', padding: 14, borderRadius: 8, alignItems: 'center' },
+  submitButton: { backgroundColor: '#2563eb', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
   submitButtonText: { color: '#fff', fontWeight: '600' },
   listContainer: { padding: 24 },
   txCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
   txInfo: { flexDirection: 'row', alignItems: 'center' },
-  iconContainer: { padding: 10, borderRadius: 12, marginRight: 12 },
+  iconContainer: { padding: 10, borderRadius: 12, marginRight: 12, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
   txNotes: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
-  txDetails: { fontSize: 12, color: '#64748b', marginTop: 4 },
+  txDetails: { fontSize: 12, color: '#64748b' },
+  smallLogo: { width: 12, height: 12, borderRadius: 6, marginRight: 4 },
   txRight: { alignItems: 'flex-end' },
   txAmount: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
   deleteButton: { padding: 4 },

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { UserPlus, MailCheck } from 'lucide-react-native';
 
 export default function RegisterScreen() {
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -17,6 +18,14 @@ export default function RegisterScreen() {
 
   async function signUpWithEmail() {
     setErrorMessage('');
+    if (!username.trim()) {
+      setErrorMessage('Username is required.');
+      return;
+    }
+    if (username.includes(' ')) {
+      setErrorMessage('Username cannot contain spaces.');
+      return;
+    }
     if (password !== confirmPassword) {
       setErrorMessage('Passwords do not match!');
       return;
@@ -27,8 +36,21 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    // Check if username exists first to avoid auth rate limits if username is taken
+    const { data: existingUser } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username.toLowerCase().trim())
+      .single();
+      
+    if (existingUser) {
+      setErrorMessage('Username is already taken.');
+      setLoading(false);
+      return;
+    }
+
     const {
-      data: { session },
+      data: { session, user },
       error,
     } = await supabase.auth.signUp({
       email: email,
@@ -37,12 +59,19 @@ export default function RegisterScreen() {
 
     if (error) {
       setErrorMessage(error.message);
-    } else if (!session) {
-      // Email confirmation is enabled
-      setSuccess(true);
-    } else {
-      // Email confirmation is disabled, logged in automatically
-      navigation.navigate('Dashboard');
+    } else if (user) {
+      // Save username
+      await supabase.from('profiles').insert({
+        id: user.id,
+        username: username.toLowerCase().trim(),
+        email: email.toLowerCase().trim(),
+      });
+
+      if (!session) {
+        setSuccess(true);
+      } else {
+        navigation.navigate('Dashboard');
+      }
     }
     setLoading(false);
   }
@@ -81,6 +110,17 @@ export default function RegisterScreen() {
             <Text style={styles.errorText}>{errorMessage}</Text>
           </View>
         ) : null}
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Username</Text>
+          <TextInput
+            style={styles.input}
+            onChangeText={(text) => setUsername(text)}
+            value={username}
+            placeholder="johndoe"
+            autoCapitalize={'none'}
+          />
+        </View>
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>

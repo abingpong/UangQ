@@ -7,17 +7,36 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Wallet } from 'lucide-react-native';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
-  async function signInWithEmail() {
+  async function signIn() {
     setErrorMessage('');
     setLoading(true);
+    
+    let loginEmail = identifier.trim().toLowerCase();
+    
+    // If it doesn't look like an email, treat as username and lookup email
+    if (!loginEmail.includes('@')) {
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('username', loginEmail)
+        .single();
+        
+      if (profileError || !data) {
+        setErrorMessage('Username not found');
+        setLoading(false);
+        return;
+      }
+      loginEmail = data.email;
+    }
+
     const { error } = await supabase.auth.signInWithPassword({
-      email: email,
+      email: loginEmail,
       password: password,
     });
 
@@ -40,14 +59,13 @@ export default function LoginScreen() {
       ) : null}
 
       <View style={styles.inputContainer}>
-        <Text style={styles.label}>Email</Text>
+        <Text style={styles.label}>Email or Username</Text>
         <TextInput
           style={styles.input}
-          onChangeText={(text) => setEmail(text)}
-          value={email}
-          placeholder="email@address.com"
+          onChangeText={(text) => setIdentifier(text)}
+          value={identifier}
+          placeholder="johndoe or email@address.com"
           autoCapitalize={'none'}
-          keyboardType="email-address"
         />
       </View>
       <View style={styles.inputContainer}>
@@ -69,7 +87,7 @@ export default function LoginScreen() {
 
       <TouchableOpacity 
         style={[styles.button, loading && styles.buttonDisabled]} 
-        onPress={signInWithEmail} 
+        onPress={signIn} 
         disabled={loading}
       >
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In</Text>}
