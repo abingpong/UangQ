@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LogIn } from 'lucide-react-native';
+import { Wallet } from 'lucide-react-native';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
