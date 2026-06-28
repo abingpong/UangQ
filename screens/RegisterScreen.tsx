@@ -4,13 +4,14 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { UserPlus } from 'lucide-react-native';
+import { UserPlus, MailCheck } from 'lucide-react-native';
 
 export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
   async function signUpWithEmail() {
@@ -35,10 +36,33 @@ export default function RegisterScreen() {
     if (error) {
       Alert.alert('Registration Failed', error.message);
     } else if (!session) {
-      Alert.alert('Success', 'Please check your inbox for email verification!');
-      navigation.navigate('Login');
+      // Email confirmation is enabled
+      setSuccess(true);
+    } else {
+      // Email confirmation is disabled, logged in automatically
+      navigation.navigate('Dashboard');
     }
     setLoading(false);
+  }
+
+  if (success) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.successContainer}>
+          <MailCheck size={64} color="#10b981" />
+          <Text style={styles.successTitle}>Check Your Email</Text>
+          <Text style={styles.successSubtitle}>
+            We have sent a verification link to {email}. Please click the link to activate your account.
+          </Text>
+          <TouchableOpacity 
+            style={styles.button} 
+            onPress={() => navigation.navigate('Login')}
+          >
+            <Text style={styles.buttonText}>Back to Login</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -115,6 +139,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexGrow: 1,
   },
+  successContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  successTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#0f172a',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  successSubtitle: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    marginBottom: 32,
+    lineHeight: 24,
+  },
   headerContainer: {
     alignItems: 'center',
     marginBottom: 48,
@@ -153,6 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 16,
+    width: '100%',
   },
   buttonDisabled: {
     backgroundColor: '#93c5fd',
