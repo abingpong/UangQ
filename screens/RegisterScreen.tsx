@@ -12,15 +12,17 @@ export default function RegisterScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
   async function signUpWithEmail() {
+    setErrorMessage('');
     if (password !== confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match!');
+      setErrorMessage('Passwords do not match!');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
+      setErrorMessage('Password must be at least 6 characters long.');
       return;
     }
 
@@ -34,7 +36,7 @@ export default function RegisterScreen() {
     });
 
     if (error) {
-      Alert.alert('Registration Failed', error.message);
+      setErrorMessage(error.message);
     } else if (!session) {
       // Email confirmation is enabled
       setSuccess(true);
@@ -73,6 +75,12 @@ export default function RegisterScreen() {
           <Text style={styles.title}>Create Account</Text>
           <Text style={styles.subtitle}>Sign up to get started</Text>
         </View>
+
+        {errorMessage ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.inputContainer}>
           <Text style={styles.label}>Email</Text>
@@ -173,6 +181,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b',
     marginTop: 8,
+  },
+  errorContainer: {
+    backgroundColor: '#fee2e2',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  errorText: {
+    color: '#ef4444',
+    fontSize: 14,
+    textAlign: 'center',
   },
   inputContainer: {
     marginBottom: 16,
