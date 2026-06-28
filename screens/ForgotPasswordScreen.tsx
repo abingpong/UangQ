@@ -1,130 +1,68 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { KeyRound } from 'lucide-react-native';
+import { Mail, ArrowLeft } from 'lucide-react-native';
+import { COLORS } from '../constants/theme';
 
 export default function ForgotPasswordScreen() {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
-  const navigation = useNavigation();
+  const [sent, setSent] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
 
-  async function resetPassword() {
-    if (!email) {
-      Alert.alert('Error', 'Please enter your email address');
-      return;
-    }
+  const handleReset = async () => {
+    setErrorMessage('');
+    if (!email.trim()) { setErrorMessage('Email wajib diisi'); return; }
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://uangq.vercel.app/update-password',
-    });
-
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('Success', 'Check your email for the password reset link!');
-      navigation.goBack();
-    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: 'https://uangq.vercel.app/update-password' });
+    if (error) setErrorMessage(error.message);
+    else setSent(true);
     setLoading(false);
-  }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <KeyRound size={48} color="#2563eb" />
-        <Text style={styles.title}>Reset Password</Text>
-        <Text style={styles.subtitle}>Enter your email to receive a reset link</Text>
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          onChangeText={(text) => setEmail(text)}
-          value={email}
-          placeholder="email@address.com"
-          autoCapitalize={'none'}
-          keyboardType="email-address"
-        />
-      </View>
-
-      <TouchableOpacity 
-        style={[styles.button, loading && styles.buttonDisabled]} 
-        onPress={resetPassword} 
-        disabled={loading}
-      >
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Send Reset Link</Text>}
+      <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
+        <ArrowLeft size={24} color={COLORS.textSecondary} />
       </TouchableOpacity>
+      <View style={styles.content}>
+        <View style={styles.iconWrap}><Mail size={40} color={COLORS.purple} /></View>
+        <Text style={styles.title}>{sent ? 'Cek Email Anda' : 'Lupa Password'}</Text>
+        <Text style={styles.subtitle}>{sent ? `Link reset telah dikirim ke ${email}` : 'Masukkan email untuk menerima link reset password'}</Text>
 
-      <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-        <Text style={styles.link}>Back to Login</Text>
-      </TouchableOpacity>
+        {!sent && (
+          <>
+            {errorMessage ? <View style={styles.errorBox}><Text style={styles.errorText}>{errorMessage}</Text></View> : null}
+            <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@address.com" placeholderTextColor={COLORS.textMuted} autoCapitalize="none" keyboardType="email-address" />
+            <TouchableOpacity style={[styles.button, loading && { opacity: 0.6 }]} onPress={handleReset} disabled={loading}>
+              {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Kirim Link Reset</Text>}
+            </TouchableOpacity>
+          </>
+        )}
+        {sent && (
+          <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.buttonText}>Kembali ke Login</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  buttonDisabled: {
-    backgroundColor: '#93c5fd',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  backButton: {
-    alignItems: 'center',
-    marginTop: 32,
-  },
-  link: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: COLORS.bgPrimary },
+  back: { padding: 20 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  iconWrap: { width: 80, height: 80, borderRadius: 24, backgroundColor: COLORS.bgCard, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  title: { fontSize: 24, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 8 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 32, lineHeight: 22 },
+  input: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, padding: 14, borderRadius: 12, fontSize: 16, color: COLORS.textPrimary, width: '100%', marginBottom: 16 },
+  button: { backgroundColor: COLORS.purple, padding: 16, borderRadius: 12, alignItems: 'center', width: '100%' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  errorBox: { backgroundColor: COLORS.redBg, padding: 12, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: COLORS.red, width: '100%' },
+  errorText: { color: COLORS.red, fontSize: 13, textAlign: 'center' },
 });

@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { UserPlus, MailCheck } from 'lucide-react-native';
+import { COLORS } from '../constants/theme';
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -18,60 +19,21 @@ export default function RegisterScreen() {
 
   async function signUpWithEmail() {
     setErrorMessage('');
-    if (!username.trim()) {
-      setErrorMessage('Username is required.');
-      return;
-    }
-    if (username.includes(' ')) {
-      setErrorMessage('Username cannot contain spaces.');
-      return;
-    }
-    if (password !== confirmPassword) {
-      setErrorMessage('Passwords do not match!');
-      return;
-    }
-    if (password.length < 6) {
-      setErrorMessage('Password must be at least 6 characters long.');
-      return;
-    }
+    if (!username.trim()) { setErrorMessage('Username wajib diisi.'); return; }
+    if (username.includes(' ')) { setErrorMessage('Username tidak boleh ada spasi.'); return; }
+    if (password !== confirmPassword) { setErrorMessage('Password tidak cocok!'); return; }
+    if (password.length < 6) { setErrorMessage('Password minimal 6 karakter.'); return; }
 
     setLoading(true);
-    // Check if username exists first to avoid auth rate limits if username is taken
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', username.toLowerCase().trim())
-      .single();
-      
-    if (existingUser) {
-      setErrorMessage('Username is already taken.');
-      setLoading(false);
-      return;
-    }
+    const { data: existing } = await supabase.from('profiles').select('username').eq('username', username.toLowerCase().trim()).single();
+    if (existing) { setErrorMessage('Username sudah dipakai.'); setLoading(false); return; }
 
-    const {
-      data: { session, user },
-      error,
-    } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    });
-
-    if (error) {
-      setErrorMessage(error.message);
-    } else if (user) {
-      // Save username
-      await supabase.from('profiles').insert({
-        id: user.id,
-        username: username.toLowerCase().trim(),
-        email: email.toLowerCase().trim(),
-      });
-
-      if (!session) {
-        setSuccess(true);
-      } else {
-        navigation.navigate('Dashboard');
-      }
+    const { data: { session, user }, error } = await supabase.auth.signUp({ email, password });
+    if (error) { setErrorMessage(error.message); }
+    else if (user) {
+      await supabase.from('profiles').insert({ id: user.id, username: username.toLowerCase().trim(), email: email.toLowerCase().trim() });
+      if (!session) setSuccess(true);
+      else navigation.navigate('Login');
     }
     setLoading(false);
   }
@@ -80,16 +42,11 @@ export default function RegisterScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.successContainer}>
-          <MailCheck size={64} color="#10b981" />
-          <Text style={styles.successTitle}>Check Your Email</Text>
-          <Text style={styles.successSubtitle}>
-            We have sent a verification link to {email}. Please click the link to activate your account.
-          </Text>
-          <TouchableOpacity 
-            style={styles.button} 
-            onPress={() => navigation.navigate('Login')}
-          >
-            <Text style={styles.buttonText}>Back to Login</Text>
+          <MailCheck size={64} color={COLORS.green} />
+          <Text style={styles.successTitle}>Cek Email Anda</Text>
+          <Text style={styles.successSub}>Kami telah mengirim link verifikasi ke {email}. Klik link tersebut untuk mengaktifkan akun.</Text>
+          <TouchableOpacity style={styles.button} onPress={() => navigation.navigate('Login')}>
+            <Text style={styles.buttonText}>Kembali ke Login</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -98,78 +55,35 @@ export default function RegisterScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerContainer}>
-          <UserPlus size={48} color="#2563eb" />
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>Sign up to get started</Text>
+          <View style={styles.iconWrap}><UserPlus size={40} color={COLORS.purple} /></View>
+          <Text style={styles.title}>Buat Akun</Text>
+          <Text style={styles.subtitle}>Daftar untuk mulai mengelola keuangan</Text>
         </View>
 
-        {errorMessage ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        ) : null}
+        {errorMessage ? <View style={styles.errorBox}><Text style={styles.errorText}>{errorMessage}</Text></View> : null}
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={(text) => setUsername(text)}
-            value={username}
-            placeholder="johndoe"
-            autoCapitalize={'none'}
-          />
-        </View>
+        <Text style={styles.label}>Username</Text>
+        <TextInput style={styles.input} onChangeText={setUsername} value={username} placeholder="johndoe" placeholderTextColor={COLORS.textMuted} autoCapitalize="none" />
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={(text) => setEmail(text)}
-            value={email}
-            placeholder="email@address.com"
-            autoCapitalize={'none'}
-            keyboardType="email-address"
-          />
-        </View>
-        
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={(text) => setPassword(text)}
-            value={password}
-            secureTextEntry={true}
-            placeholder="Password"
-            autoCapitalize={'none'}
-          />
-        </View>
+        <Text style={styles.label}>Email</Text>
+        <TextInput style={styles.input} onChangeText={setEmail} value={email} placeholder="email@address.com" placeholderTextColor={COLORS.textMuted} autoCapitalize="none" keyboardType="email-address" />
 
-        <View style={styles.inputContainer}>
-          <Text style={styles.label}>Confirm Password</Text>
-          <TextInput
-            style={styles.input}
-            onChangeText={(text) => setConfirmPassword(text)}
-            value={confirmPassword}
-            secureTextEntry={true}
-            placeholder="Confirm Password"
-            autoCapitalize={'none'}
-          />
-        </View>
+        <Text style={styles.label}>Password</Text>
+        <TextInput style={styles.input} onChangeText={setPassword} value={password} placeholder="Password" placeholderTextColor={COLORS.textMuted} secureTextEntry autoCapitalize="none" />
 
-        <TouchableOpacity 
-          style={[styles.button, loading && styles.buttonDisabled]} 
-          onPress={signUpWithEmail} 
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
+        <Text style={styles.label}>Konfirmasi Password</Text>
+        <TextInput style={styles.input} onChangeText={setConfirmPassword} value={confirmPassword} placeholder="Ketik ulang password" placeholderTextColor={COLORS.textMuted} secureTextEntry autoCapitalize="none" />
+
+        <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]} onPress={signUpWithEmail} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Daftar</Text>}
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account? </Text>
+          <Text style={styles.footerText}>Sudah punya akun? </Text>
           <TouchableOpacity onPress={() => navigation.navigate('Login')}>
-            <Text style={styles.link}>Sign In</Text>
+            <Text style={styles.link}>Masuk</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -178,106 +92,23 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  scrollContent: {
-    padding: 24,
-    justifyContent: 'center',
-    flexGrow: 1,
-  },
-  successContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  successTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginTop: 24,
-    marginBottom: 8,
-  },
-  successSubtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    textAlign: 'center',
-    marginBottom: 32,
-    lineHeight: 24,
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    marginTop: 8,
-  },
-  errorContainer: {
-    backgroundColor: '#fee2e2',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#fca5a5',
-  },
-  errorText: {
-    color: '#ef4444',
-    fontSize: 14,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-    width: '100%',
-  },
-  buttonDisabled: {
-    backgroundColor: '#93c5fd',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  footerText: {
-    color: '#64748b',
-  },
-  link: {
-    color: '#2563eb',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: COLORS.bgPrimary },
+  content: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 32 },
+  successContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
+  successTitle: { fontSize: 24, fontWeight: 'bold', color: COLORS.textPrimary, marginTop: 24, marginBottom: 8 },
+  successSub: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 32, lineHeight: 22 },
+  headerContainer: { alignItems: 'center', marginBottom: 32 },
+  iconWrap: { width: 80, height: 80, borderRadius: 24, backgroundColor: COLORS.bgCard, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
+  title: { fontSize: 28, fontWeight: 'bold', color: COLORS.textPrimary },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, marginTop: 6 },
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
+  input: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, padding: 14, borderRadius: 12, fontSize: 16, color: COLORS.textPrimary, marginBottom: 16 },
+  button: { backgroundColor: COLORS.purple, padding: 16, borderRadius: 12, alignItems: 'center', marginTop: 8 },
+  buttonDisabled: { opacity: 0.6 },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: 32 },
+  footerText: { color: COLORS.textSecondary },
+  link: { color: COLORS.purple, fontWeight: '600' },
+  errorBox: { backgroundColor: COLORS.redBg, padding: 12, borderRadius: 8, marginBottom: 16, borderWidth: 1, borderColor: COLORS.red },
+  errorText: { color: COLORS.red, fontSize: 13, textAlign: 'center' },
 });

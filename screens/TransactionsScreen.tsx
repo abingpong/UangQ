@@ -3,8 +3,9 @@ import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, 
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Calendar, Wallet } from 'lucide-react-native';
+import { Plus, Trash2, ArrowUpCircle, ArrowDownCircle, Calendar, Wallet, ArrowLeft } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../constants/theme';
 
 export default function TransactionsScreen() {
   const { user } = useAuth();
@@ -13,270 +14,149 @@ export default function TransactionsScreen() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Form State
   const [isAdding, setIsAdding] = useState(false);
   const [amount, setAmount] = useState('');
   const [notes, setNotes] = useState('');
-  const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]); // YYYY-MM-DD
+  const [txDate, setTxDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
-  const [type, setType] = useState('expense'); // expense or income
+  const [type, setType] = useState('expense');
 
-  useEffect(() => {
-    fetchData();
-  }, [user]);
+  useEffect(() => { fetchData(); }, [user]);
 
   const fetchData = async () => {
-    try {
-      // Fetch Accounts
-      const { data: accountsData } = await supabase.from('accounts').select('*').eq('user_id', user?.id);
-      setAccounts(accountsData || []);
-      if (accountsData && accountsData.length > 0) setSelectedAccountId(accountsData[0].id);
-
-      // Fetch Categories
-      const { data: categoriesData } = await supabase.from('categories').select('*');
-      setCategories(categoriesData || []);
-
-      // Fetch Transactions
-      if (accountsData && accountsData.length > 0) {
-        const accIds = accountsData.map(a => a.id);
-        const { data: txData } = await supabase
-          .from('transactions')
-          .select('*, categories(*), accounts(*)')
-          .in('account_id', accIds)
-          .order('transaction_date', { ascending: false });
-        setTransactions(txData || []);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-    } finally {
-      setLoading(false);
+    if (!user) return;
+    const { data: accs } = await supabase.from('accounts').select('*').eq('user_id', user.id);
+    setAccounts(accs || []);
+    if (accs && accs.length > 0) setSelectedAccountId(accs[0].id);
+    const { data: cats } = await supabase.from('categories').select('*');
+    setCategories(cats || []);
+    if (accs && accs.length > 0) {
+      const ids = accs.map(a => a.id);
+      const { data: txs } = await supabase.from('transactions').select('*, categories(*), accounts(*)').in('account_id', ids).order('transaction_date', { ascending: false });
+      setTransactions(txs || []);
     }
+    setLoading(false);
   };
 
-  const handleAddTransaction = async () => {
-    if (!amount || !selectedAccountId) {
-      Alert.alert('Error', 'Amount and Account are required');
-      return;
-    }
+  const handleAdd = async () => {
+    if (!amount || !selectedAccountId) { Alert.alert('Error', 'Nominal dan akun wajib diisi'); return; }
     setLoading(true);
-    
-    // Default category if none selected
     let catId = selectedCategoryId;
-    if (!catId) {
-      const defaultCat = categories.find(c => c.type === type);
-      if (defaultCat) catId = defaultCat.id;
-    }
-
-    try {
-      const numAmount = parseFloat(amount);
-      
-      const { error } = await supabase.from('transactions').insert({
-        account_id: selectedAccountId,
-        category_id: catId || null,
-        amount: numAmount,
-        transaction_date: new Date(txDate).toISOString(),
-        notes: notes,
-      });
-      if (error) throw error;
-      
-      // Update account balance
-      const account = accounts.find(a => a.id === selectedAccountId);
-      if (account) {
-        const newBalance = type === 'income' 
-          ? Number(account.current_balance) + numAmount 
-          : Number(account.current_balance) - numAmount;
-          
-        await supabase.from('accounts').update({ current_balance: newBalance }).eq('id', selectedAccountId);
+    if (!catId) { const dc = categories.find(c => c.type === type); if (dc) catId = dc.id; }
+    const numAmount = parseFloat(amount);
+    const { error } = await supabase.from('transactions').insert({ account_id: selectedAccountId, category_id: catId || null, amount: numAmount, transaction_date: new Date(txDate).toISOString(), notes });
+    if (!error) {
+      const acc = accounts.find(a => a.id === selectedAccountId);
+      if (acc) {
+        const nb = type === 'income' ? Number(acc.current_balance) + numAmount : Number(acc.current_balance) - numAmount;
+        await supabase.from('accounts').update({ current_balance: nb }).eq('id', selectedAccountId);
       }
-
-      setAmount('');
-      setNotes('');
-      setTxDate(new Date().toISOString().split('T')[0]);
-      setIsAdding(false);
-      fetchData();
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
-      setLoading(false);
-    }
+      setAmount(''); setNotes(''); setTxDate(new Date().toISOString().split('T')[0]); setIsAdding(false); fetchData();
+    } else { Alert.alert('Error', error.message); setLoading(false); }
   };
 
   const handleDelete = async (tx: any) => {
-    Alert.alert('Delete Transaction', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          const { error } = await supabase.from('transactions').delete().eq('id', tx.id);
-          if (error) {
-            Alert.alert('Error', error.message);
-          } else {
-            // Revert balance
-            const account = accounts.find(a => a.id === tx.account_id);
-            if (account) {
-              const revertAmount = tx.categories?.type === 'income' 
-                ? Number(account.current_balance) - tx.amount 
-                : Number(account.current_balance) + tx.amount;
-              await supabase.from('accounts').update({ current_balance: revertAmount }).eq('id', tx.account_id);
-            }
-            fetchData();
-          }
+    Alert.alert('Hapus Transaksi', 'Yakin?', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: async () => {
+        setLoading(true);
+        await supabase.from('transactions').delete().eq('id', tx.id);
+        const acc = accounts.find(a => a.id === tx.account_id);
+        if (acc) {
+          const rv = tx.categories?.type === 'income' ? Number(acc.current_balance) - tx.amount : Number(acc.current_balance) + tx.amount;
+          await supabase.from('accounts').update({ current_balance: rv }).eq('id', tx.account_id);
         }
-      }
+        fetchData();
+      }}
     ]);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
-  };
-
-  const filteredCategories = categories.filter(c => c.type === type);
+  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+  const filteredCats = categories.filter(c => c.type === type);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Transactions</Text>
-        <TouchableOpacity onPress={() => setIsAdding(!isAdding)} style={styles.addButton}>
-          <Plus color="#2563eb" size={24} />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}><ArrowLeft size={24} color={COLORS.textSecondary} /></TouchableOpacity>
+        <Text style={styles.headerTitle}>Transaksi</Text>
+        <TouchableOpacity onPress={() => setIsAdding(!isAdding)}><Plus size={24} color={COLORS.purple} /></TouchableOpacity>
       </View>
 
       {isAdding && (
-        <ScrollView style={styles.addFormScrollView} keyboardShouldPersistTaps="handled">
-          <View style={styles.addForm}>
-            <View style={styles.typeSelector}>
-              <TouchableOpacity
-                style={[styles.typeButton, type === 'expense' && styles.typeButtonExpenseActive]}
-                onPress={() => setType('expense')}
-              >
-                <Text style={[styles.typeButtonText, type === 'expense' && { color: '#ef4444' }]}>Pengeluaran</Text>
+        <ScrollView style={{ maxHeight: '100%' }} keyboardShouldPersistTaps="handled">
+          <View style={styles.form}>
+            <View style={styles.typeRow}>
+              <TouchableOpacity style={[styles.typeBtn, type === 'expense' && styles.typeBtnExp]} onPress={() => setType('expense')}>
+                <Text style={[styles.typeBtnText, type === 'expense' && { color: COLORS.red }]}>Pengeluaran</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.typeButton, type === 'income' && styles.typeButtonIncomeActive]}
-                onPress={() => setType('income')}
-              >
-                <Text style={[styles.typeButtonText, type === 'income' && { color: '#10b981' }]}>Pemasukan</Text>
+              <TouchableOpacity style={[styles.typeBtn, type === 'income' && styles.typeBtnInc]} onPress={() => setType('income')}>
+                <Text style={[styles.typeBtnText, type === 'income' && { color: COLORS.green }]}>Pemasukan</Text>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Tanggal (YYYY-MM-DD)</Text>
-            <View style={styles.dateContainer}>
-              <Calendar color="#64748b" size={20} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.dateInput}
-                value={txDate}
-                onChangeText={setTxDate}
-                placeholder="2023-12-31"
-              />
+            <Text style={styles.label}>Tanggal</Text>
+            <View style={styles.dateRow}>
+              <Calendar color={COLORS.textMuted} size={18} style={{ marginRight: 8 }} />
+              <TextInput style={styles.dateInput} value={txDate} onChangeText={setTxDate} placeholder="YYYY-MM-DD" placeholderTextColor={COLORS.textMuted} />
             </View>
 
             <Text style={styles.label}>Nominal (Rp)</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              placeholder="Contoh: 50000"
-              keyboardType="numeric"
-            />
-            
+            <TextInput style={styles.input} value={amount} onChangeText={setAmount} placeholder="50000" placeholderTextColor={COLORS.textMuted} keyboardType="numeric" />
+
             <Text style={styles.label}>Kategori</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
-              {filteredCategories.map(cat => (
-                <TouchableOpacity 
-                  key={cat.id} 
-                  style={[styles.catChip, selectedCategoryId === cat.id && styles.catChipActive]}
-                  onPress={() => setSelectedCategoryId(cat.id)}
-                >
-                  <Text style={styles.catIcon}>{cat.icon || '📌'}</Text>
-                  <Text style={[styles.chipText, selectedCategoryId === cat.id && styles.chipTextActive]}>{cat.name}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+              {filteredCats.map(c => (
+                <TouchableOpacity key={c.id} style={[styles.chip, selectedCategoryId === c.id && styles.chipActive]} onPress={() => setSelectedCategoryId(c.id)}>
+                  <Text style={styles.chipIcon}>{c.icon || '📌'}</Text>
+                  <Text style={[styles.chipText, selectedCategoryId === c.id && styles.chipTextActive]}>{c.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
             <Text style={styles.label}>Sumber Dana</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollSelector}>
-              {accounts.map(acc => (
-                <TouchableOpacity 
-                  key={acc.id} 
-                  style={[styles.accountChip, selectedAccountId === acc.id && styles.accountChipActive]}
-                  onPress={() => setSelectedAccountId(acc.id)}
-                >
-                  {acc.provider_code ? (
-                    <Image source={{ uri: `https://logo.clearbit.com/${acc.provider_code}` }} style={styles.accountLogo} />
-                  ) : (
-                    <Wallet size={16} color={selectedAccountId === acc.id ? "#2563eb" : "#64748b"} style={{marginRight: 6}} />
-                  )}
-                  <Text style={[styles.chipText, selectedAccountId === acc.id && styles.chipTextActive]}>{acc.name}</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll}>
+              {accounts.map(a => (
+                <TouchableOpacity key={a.id} style={[styles.chip, selectedAccountId === a.id && styles.chipActive]} onPress={() => setSelectedAccountId(a.id)}>
+                  {a.provider_code ? <Image source={{ uri: `https://logo.clearbit.com/${a.provider_code}` }} style={styles.chipLogo} /> : <Wallet size={14} color={selectedAccountId === a.id ? '#fff' : COLORS.textSecondary} style={{ marginRight: 4 }} />}
+                  <Text style={[styles.chipText, selectedAccountId === a.id && styles.chipTextActive]}>{a.name}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            <Text style={styles.label}>Keterangan Tambahan</Text>
-            <TextInput
-              style={styles.input}
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Contoh: Makan siang bareng teman"
-            />
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleAddTransaction}>
-              <Text style={styles.submitButtonText}>Simpan Transaksi</Text>
-            </TouchableOpacity>
+            <Text style={styles.label}>Keterangan</Text>
+            <TextInput style={styles.input} value={notes} onChangeText={setNotes} placeholder="Makan siang" placeholderTextColor={COLORS.textMuted} />
+            <TouchableOpacity style={styles.saveBtn} onPress={handleAdd}><Text style={styles.saveBtnText}>Simpan Transaksi</Text></TouchableOpacity>
           </View>
         </ScrollView>
       )}
 
-      {loading && !isAdding ? (
-        <ActivityIndicator color="#2563eb" style={{ marginTop: 24 }} />
-      ) : !isAdding && (
-        <FlatList
-          data={transactions}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
+      {loading && !isAdding ? <ActivityIndicator color={COLORS.purple} style={{ marginTop: 24 }} /> : !isAdding && (
+        <FlatList data={transactions} keyExtractor={i => i.id} contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const isIncome = item.categories?.type === 'income';
+            const isInc = item.categories?.type === 'income';
             return (
               <View style={styles.txCard}>
-                <View style={styles.txInfo}>
-                  <View style={[styles.iconContainer, { backgroundColor: isIncome ? '#d1fae5' : '#fee2e2' }]}>
-                    {item.categories?.icon ? (
-                      <Text style={{fontSize: 24}}>{item.categories.icon}</Text>
-                    ) : (
-                      isIncome ? <ArrowDownCircle color="#10b981" size={24} /> : <ArrowUpCircle color="#ef4444" size={24} />
-                    )}
+                <View style={styles.txLeft}>
+                  <View style={[styles.txIcon, { backgroundColor: isInc ? COLORS.greenBg : COLORS.redBg }]}>
+                    {item.categories?.icon ? <Text style={{ fontSize: 20 }}>{item.categories.icon}</Text> : (isInc ? <ArrowDownCircle color={COLORS.green} size={22} /> : <ArrowUpCircle color={COLORS.red} size={22} />)}
                   </View>
-                  <View>
-                    <Text style={styles.txNotes}>{item.notes || item.categories?.name || 'Transaction'}</Text>
-                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 4}}>
-                      {item.accounts?.provider_code ? (
-                        <Image source={{ uri: `https://logo.clearbit.com/${item.accounts.provider_code}` }} style={styles.smallLogo} />
-                      ) : null}
-                      <Text style={styles.txDetails}>{item.accounts?.name} • {new Date(item.transaction_date).toLocaleDateString()}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.txTitle} numberOfLines={1}>{item.notes || item.categories?.name || 'Transaksi'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                      {item.accounts?.provider_code ? <Image source={{ uri: `https://logo.clearbit.com/${item.accounts.provider_code}` }} style={styles.smallLogo} /> : null}
+                      <Text style={styles.txSub}>{item.accounts?.name} • {new Date(item.transaction_date).toLocaleDateString('id-ID')}</Text>
                     </View>
                   </View>
                 </View>
                 <View style={styles.txRight}>
-                  <Text style={[styles.txAmount, { color: isIncome ? '#10b981' : '#ef4444' }]}>
-                    {isIncome ? '+' : '-'}{formatCurrency(item.amount)}
-                  </Text>
-                  <TouchableOpacity onPress={() => handleDelete(item)} style={styles.deleteButton}>
-                    <Trash2 color="#94a3b8" size={18} />
-                  </TouchableOpacity>
+                  <Text style={[styles.txAmount, { color: isInc ? COLORS.green : COLORS.red }]}>{isInc ? '+' : '-'}{fmt(item.amount)}</Text>
+                  <TouchableOpacity onPress={() => handleDelete(item)}><Trash2 color={COLORS.textMuted} size={16} /></TouchableOpacity>
                 </View>
               </View>
             );
           }}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>Belum ada transaksi.</Text>
-            </View>
-          }
+          ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>Belum ada transaksi.</Text></View>}
         />
       )}
     </SafeAreaView>
@@ -284,44 +164,37 @@ export default function TransactionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24, paddingVertical: 16, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  backButton: { padding: 8 },
-  backButtonText: { color: '#64748b', fontWeight: '600' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#0f172a' },
-  addButton: { padding: 8 },
-  addFormScrollView: { maxHeight: '100%' },
-  addForm: { padding: 24, backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
-  typeSelector: { flexDirection: 'row', marginBottom: 16 },
-  typeButton: { flex: 1, padding: 12, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, alignItems: 'center', marginHorizontal: 4 },
-  typeButtonExpenseActive: { backgroundColor: '#fee2e2', borderColor: '#ef4444' },
-  typeButtonIncomeActive: { backgroundColor: '#d1fae5', borderColor: '#10b981' },
-  typeButtonText: { fontWeight: '600', color: '#64748b' },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', padding: 12, borderRadius: 8, marginBottom: 16 },
-  dateContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', paddingHorizontal: 12, borderRadius: 8, marginBottom: 16 },
-  dateInput: { flex: 1, paddingVertical: 12 },
-  label: { fontSize: 14, fontWeight: '500', color: '#334155', marginBottom: 8 },
-  scrollSelector: { marginBottom: 20, flexDirection: 'row', paddingBottom: 4 },
-  catChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#f8fafc', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  catChipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
-  catIcon: { fontSize: 16, marginRight: 6 },
-  accountChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: '#f8fafc', marginRight: 8, borderWidth: 1, borderColor: '#e2e8f0' },
-  accountChipActive: { backgroundColor: '#eff6ff', borderColor: '#2563eb' },
-  accountLogo: { width: 16, height: 16, borderRadius: 8, marginRight: 6 },
-  chipText: { color: '#64748b', fontSize: 12, fontWeight: '600' },
-  chipTextActive: { color: '#2563eb' },
-  submitButton: { backgroundColor: '#2563eb', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 8 },
-  submitButtonText: { color: '#fff', fontWeight: '600' },
-  listContainer: { padding: 24 },
-  txCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 2 },
-  txInfo: { flexDirection: 'row', alignItems: 'center' },
-  iconContainer: { padding: 10, borderRadius: 12, marginRight: 12, width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
-  txNotes: { fontSize: 16, fontWeight: '600', color: '#0f172a' },
-  txDetails: { fontSize: 12, color: '#64748b' },
+  container: { flex: 1, backgroundColor: COLORS.bgPrimary },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary },
+  form: { padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  typeRow: { flexDirection: 'row', marginBottom: 16 },
+  typeBtn: { flex: 1, padding: 12, borderRadius: 8, alignItems: 'center', marginHorizontal: 4, backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border },
+  typeBtnExp: { backgroundColor: COLORS.redBg, borderColor: COLORS.red },
+  typeBtnInc: { backgroundColor: COLORS.greenBg, borderColor: COLORS.green },
+  typeBtnText: { fontWeight: '600', color: COLORS.textSecondary },
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
+  input: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, padding: 12, borderRadius: 10, marginBottom: 16, color: COLORS.textPrimary },
+  dateRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, paddingHorizontal: 12, borderRadius: 10, marginBottom: 16 },
+  dateInput: { flex: 1, paddingVertical: 12, color: COLORS.textPrimary },
+  chipScroll: { marginBottom: 16, flexDirection: 'row' },
+  chip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: COLORS.bgCard, marginRight: 8, borderWidth: 1, borderColor: COLORS.border },
+  chipActive: { backgroundColor: COLORS.purple, borderColor: COLORS.purple },
+  chipIcon: { fontSize: 14, marginRight: 4 },
+  chipText: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '600' },
+  chipTextActive: { color: '#fff' },
+  chipLogo: { width: 14, height: 14, borderRadius: 7, marginRight: 4 },
+  saveBtn: { backgroundColor: COLORS.purple, padding: 14, borderRadius: 10, alignItems: 'center', marginTop: 4 },
+  saveBtnText: { color: '#fff', fontWeight: '600' },
+  list: { padding: 20 },
+  txCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.bgCard, padding: 14, borderRadius: 14, marginBottom: 8 },
+  txLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 8 },
+  txIcon: { width: 40, height: 40, borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  txTitle: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
+  txSub: { fontSize: 11, color: COLORS.textSecondary },
   smallLogo: { width: 12, height: 12, borderRadius: 6, marginRight: 4 },
   txRight: { alignItems: 'flex-end' },
-  txAmount: { fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  deleteButton: { padding: 4 },
-  emptyState: { padding: 24, alignItems: 'center' },
-  emptyStateText: { color: '#64748b' },
+  txAmount: { fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
+  empty: { padding: 24, alignItems: 'center' },
+  emptyText: { color: COLORS.textSecondary },
 });

@@ -3,8 +3,9 @@ import { StyleSheet, View, Text, TouchableOpacity, FlatList, ActivityIndicator, 
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Wallet, Trash2, CheckCircle2 } from 'lucide-react-native';
+import { Plus, Wallet, Trash2, CheckCircle2, ArrowLeft, Banknote, CreditCard, TrendingUp } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../constants/theme';
 
 const BANK_PROVIDERS = [
   { code: 'bca.co.id', name: 'BCA' },
@@ -28,202 +29,113 @@ export default function AccountsScreen() {
   const navigation = useNavigation();
   const [accounts, setAccounts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Add new account state
   const [isAdding, setIsAdding] = useState(false);
   const [newAccountName, setNewAccountName] = useState('');
-  const [newAccountType, setNewAccountType] = useState('bank'); // bank, ewallet, cash
+  const [newAccountType, setNewAccountType] = useState('bank');
   const [selectedProvider, setSelectedProvider] = useState('');
 
-  useEffect(() => {
-    fetchAccounts();
-  }, [user]);
+  useEffect(() => { fetchAccounts(); }, [user]);
 
   const fetchAccounts = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('accounts')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      setAccounts(data || []);
-    } catch (error: any) {
-      Alert.alert('Error fetching accounts', error.message);
-    } finally {
-      setLoading(false);
-    }
+    const { data, error } = await supabase.from('accounts').select('*').eq('user_id', user?.id).order('created_at', { ascending: false });
+    if (!error) setAccounts(data || []);
+    setLoading(false);
   };
 
-  const handleProviderSelect = (provider: any) => {
-    setSelectedProvider(provider.code);
-    setNewAccountName(provider.name);
-  };
+  const handleProviderSelect = (p: any) => { setSelectedProvider(p.code); setNewAccountName(p.name); };
 
   const handleAddAccount = async () => {
-    if (!newAccountName.trim()) {
-      Alert.alert('Validation Error', 'Account name is required');
-      return;
-    }
+    if (!newAccountName.trim()) { Alert.alert('Error', 'Nama akun wajib diisi'); return; }
     setLoading(true);
-    try {
-      const { error } = await supabase.from('accounts').insert({
-        user_id: user?.id,
-        name: newAccountName,
-        type: newAccountType,
-        provider_code: selectedProvider || null,
-        current_balance: 0,
-      });
-      if (error) throw error;
-      
-      setNewAccountName('');
-      setSelectedProvider('');
-      setIsAdding(false);
-      fetchAccounts();
-    } catch (error: any) {
-      Alert.alert('Error adding account', error.message);
-      setLoading(false);
-    }
+    const { error } = await supabase.from('accounts').insert({ user_id: user?.id, name: newAccountName, type: newAccountType, provider_code: selectedProvider || null, current_balance: 0 });
+    if (!error) { setNewAccountName(''); setSelectedProvider(''); setIsAdding(false); fetchAccounts(); }
+    else { Alert.alert('Error', error.message); setLoading(false); }
   };
 
   const handleDelete = async (id: string) => {
-    Alert.alert('Delete Account', 'Are you sure? This will delete all transactions in this account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          setLoading(true);
-          const { error } = await supabase.from('accounts').delete().eq('id', id);
-          if (error) {
-            Alert.alert('Error', error.message);
-            setLoading(false);
-          } else {
-            fetchAccounts();
-          }
-        }
-      }
+    Alert.alert('Hapus Akun', 'Yakin? Semua transaksi di akun ini akan ikut terhapus.', [
+      { text: 'Batal', style: 'cancel' },
+      { text: 'Hapus', style: 'destructive', onPress: async () => { setLoading(true); await supabase.from('accounts').delete().eq('id', id); fetchAccounts(); } }
     ]);
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'cash': return <Banknote size={24} color={COLORS.green} />;
+      case 'ewallet': return <Wallet size={24} color={COLORS.blueBright} />;
+      case 'bank': return <CreditCard size={24} color={COLORS.purple} />;
+      case 'investment': return <TrendingUp size={24} color={COLORS.yellow} />;
+      default: return <Wallet size={24} color={COLORS.textSecondary} />;
+    }
   };
 
-  const renderProviderSelector = () => {
-    if (newAccountType === 'cash') return null;
-    
-    const providers = newAccountType === 'bank' ? BANK_PROVIDERS : EWALLET_PROVIDERS;
-    
-    return (
-      <View style={styles.providerContainer}>
-        <Text style={styles.label}>Select Provider</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.providerScroll}>
-          {providers.map((p) => (
-            <TouchableOpacity 
-              key={p.code} 
-              style={[styles.providerCard, selectedProvider === p.code && styles.providerCardActive]}
-              onPress={() => handleProviderSelect(p)}
-            >
-              <Image source={{ uri: `https://logo.clearbit.com/${p.code}` }} style={styles.providerImage} />
-              <Text style={styles.providerName}>{p.name}</Text>
-              {selectedProvider === p.code && (
-                <View style={styles.checkIcon}>
-                  <CheckCircle2 size={16} color="#2563eb" />
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-    );
-  };
+  const providers = newAccountType === 'bank' ? BANK_PROVIDERS : newAccountType === 'ewallet' ? EWALLET_PROVIDERS : [];
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Accounts</Text>
-        <TouchableOpacity onPress={() => setIsAdding(!isAdding)} style={styles.addButton}>
-          <Plus color="#2563eb" size={24} />
-        </TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.goBack()}><ArrowLeft size={24} color={COLORS.textSecondary} /></TouchableOpacity>
+        <Text style={styles.headerTitle}>Dompet Saya</Text>
+        <TouchableOpacity onPress={() => setIsAdding(!isAdding)}><Plus size={24} color={COLORS.purple} /></TouchableOpacity>
       </View>
 
       {isAdding && (
-        <View style={styles.addForm}>
-          <Text style={styles.label}>Type</Text>
-          <View style={styles.typeSelector}>
-            {['bank', 'ewallet', 'cash'].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[styles.typeButton, newAccountType === type && styles.typeButtonActive]}
-                onPress={() => {
-                  setNewAccountType(type);
-                  setSelectedProvider('');
-                  setNewAccountName(type === 'cash' ? 'Cash Wallet' : '');
-                }}
-              >
-                <Text style={[styles.typeButtonText, newAccountType === type && styles.typeButtonTextActive]}>
-                  {type.toUpperCase()}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-          
-          {renderProviderSelector()}
+        <ScrollView style={styles.formScroll}>
+          <View style={styles.form}>
+            <Text style={styles.label}>Tipe</Text>
+            <View style={styles.typeRow}>
+              {['cash', 'ewallet', 'bank', 'investment'].map(t => (
+                <TouchableOpacity key={t} style={[styles.typeBtn, newAccountType === t && styles.typeBtnActive]}
+                  onPress={() => { setNewAccountType(t); setSelectedProvider(''); setNewAccountName(t === 'cash' ? 'Cash' : ''); }}>
+                  <Text style={[styles.typeBtnText, newAccountType === t && styles.typeBtnTextActive]}>{t.toUpperCase()}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
 
-          <Text style={styles.label}>Account Name</Text>
-          <TextInput
-            style={styles.input}
-            value={newAccountName}
-            onChangeText={setNewAccountName}
-            placeholder="e.g. BCA, OVO, Cash Wallet"
-          />
-          
-          <TouchableOpacity style={styles.submitButton} onPress={handleAddAccount}>
-            <Text style={styles.submitButtonText}>Save Account</Text>
-          </TouchableOpacity>
-        </View>
+            {providers.length > 0 && (
+              <>
+                <Text style={styles.label}>Pilih Provider</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                  {providers.map(p => (
+                    <TouchableOpacity key={p.code} style={[styles.providerCard, selectedProvider === p.code && styles.providerCardActive]} onPress={() => handleProviderSelect(p)}>
+                      <Image source={{ uri: `https://logo.clearbit.com/${p.code}` }} style={styles.providerImg} />
+                      <Text style={styles.providerName}>{p.name}</Text>
+                      {selectedProvider === p.code && <View style={styles.checkIcon}><CheckCircle2 size={14} color={COLORS.purple} /></View>}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+
+            <Text style={styles.label}>Nama Akun</Text>
+            <TextInput style={styles.input} value={newAccountName} onChangeText={setNewAccountName} placeholder="Contoh: BCA, Cash" placeholderTextColor={COLORS.textMuted} />
+            <TouchableOpacity style={styles.saveBtn} onPress={handleAddAccount}><Text style={styles.saveBtnText}>Simpan</Text></TouchableOpacity>
+          </View>
+        </ScrollView>
       )}
 
-      {loading && !isAdding ? (
-        <ActivityIndicator color="#2563eb" style={{ marginTop: 24 }} />
-      ) : (
-        <FlatList
-          data={accounts}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContainer}
+      {loading && !isAdding ? <ActivityIndicator color={COLORS.purple} style={{ marginTop: 24 }} /> : (
+        <FlatList data={accounts} keyExtractor={i => i.id} contentContainerStyle={styles.list}
           renderItem={({ item }) => (
-            <View style={styles.accountCard}>
-              <View style={styles.accountInfo}>
-                <View style={styles.iconContainer}>
-                  {item.provider_code ? (
-                     <Image source={{ uri: `https://logo.clearbit.com/${item.provider_code}` }} style={styles.accountLogo} />
-                  ) : (
-                     <Wallet color="#2563eb" size={24} />
-                  )}
+            <View style={styles.card}>
+              <View style={styles.cardLeft}>
+                <View style={styles.cardIcon}>
+                  {item.provider_code ? <Image source={{ uri: `https://logo.clearbit.com/${item.provider_code}` }} style={styles.cardLogo} /> : getIcon(item.type)}
                 </View>
                 <View>
-                  <Text style={styles.accountName}>{item.name}</Text>
-                  <Text style={styles.accountType}>{item.type.toUpperCase()}</Text>
+                  <Text style={styles.cardName}>{item.name}</Text>
+                  <Text style={styles.cardType}>{item.type.toUpperCase()}</Text>
                 </View>
               </View>
-              <View style={styles.accountRight}>
-                <Text style={styles.accountBalance}>{formatCurrency(item.current_balance)}</Text>
-                <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteButton}>
-                  <Trash2 color="#ef4444" size={20} />
-                </TouchableOpacity>
+              <View style={styles.cardRight}>
+                <Text style={styles.cardBalance}>{fmt(item.current_balance)}</Text>
+                <TouchableOpacity onPress={() => handleDelete(item.id)}><Trash2 size={18} color={COLORS.red} /></TouchableOpacity>
               </View>
             </View>
           )}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No accounts found. Add one to get started.</Text>
-            </View>
-          }
+          ListEmptyComponent={<View style={styles.empty}><Text style={styles.emptyText}>Belum ada dompet. Tambahkan sekarang!</Text></View>}
         />
       )}
     </SafeAreaView>
@@ -231,191 +143,34 @@ export default function AccountsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  backButton: {
-    padding: 8,
-  },
-  backButtonText: {
-    color: '#64748b',
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0f172a',
-  },
-  addButton: {
-    padding: 8,
-  },
-  addForm: {
-    padding: 24,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  typeButton: {
-    flex: 1,
-    padding: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  typeButtonActive: {
-    backgroundColor: '#eff6ff',
-    borderColor: '#2563eb',
-  },
-  typeButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748b',
-  },
-  typeButtonTextActive: {
-    color: '#2563eb',
-  },
-  providerContainer: {
-    marginBottom: 16,
-  },
-  providerScroll: {
-    flexDirection: 'row',
-    paddingBottom: 8,
-  },
-  providerCard: {
-    backgroundColor: '#f8fafc',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 12,
-    marginRight: 12,
-    alignItems: 'center',
-    width: 80,
-    height: 90,
-  },
-  providerCardActive: {
-    borderColor: '#2563eb',
-    backgroundColor: '#eff6ff',
-  },
-  providerImage: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginBottom: 8,
-  },
-  providerName: {
-    fontSize: 10,
-    fontWeight: '600',
-    textAlign: 'center',
-    color: '#334155',
-  },
-  checkIcon: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-  },
-  submitButton: {
-    backgroundColor: '#2563eb',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  listContainer: {
-    padding: 24,
-  },
-  accountCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  accountInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    backgroundColor: '#eff6ff',
-    padding: 12,
-    borderRadius: 12,
-    marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  accountLogo: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  accountName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#0f172a',
-  },
-  accountType: {
-    fontSize: 12,
-    color: '#64748b',
-    marginTop: 4,
-  },
-  accountRight: {
-    alignItems: 'flex-end',
-  },
-  accountBalance: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginBottom: 8,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  emptyState: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyStateText: {
-    color: '#64748b',
-  },
+  container: { flex: 1, backgroundColor: COLORS.bgPrimary },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.textPrimary },
+  formScroll: { maxHeight: 400 },
+  form: { padding: 20, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  label: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
+  input: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, padding: 12, borderRadius: 10, marginBottom: 16, color: COLORS.textPrimary },
+  typeRow: { flexDirection: 'row', marginBottom: 16 },
+  typeBtn: { flex: 1, padding: 10, borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, alignItems: 'center', marginHorizontal: 3, backgroundColor: COLORS.bgCard },
+  typeBtnActive: { borderColor: COLORS.purple, backgroundColor: 'rgba(124,92,252,0.15)' },
+  typeBtnText: { fontSize: 10, fontWeight: '700', color: COLORS.textSecondary },
+  typeBtnTextActive: { color: COLORS.purple },
+  providerCard: { backgroundColor: COLORS.bgCard, borderWidth: 1, borderColor: COLORS.border, borderRadius: 12, padding: 10, marginRight: 10, alignItems: 'center', width: 75, height: 85 },
+  providerCardActive: { borderColor: COLORS.purple },
+  providerImg: { width: 28, height: 28, borderRadius: 14, marginBottom: 6 },
+  providerName: { fontSize: 9, fontWeight: '600', color: COLORS.textPrimary, textAlign: 'center' },
+  checkIcon: { position: 'absolute', top: 3, right: 3 },
+  saveBtn: { backgroundColor: COLORS.purple, padding: 14, borderRadius: 10, alignItems: 'center' },
+  saveBtnText: { color: '#fff', fontWeight: '600' },
+  list: { padding: 20 },
+  card: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: COLORS.bgCard, padding: 14, borderRadius: 14, marginBottom: 10 },
+  cardLeft: { flexDirection: 'row', alignItems: 'center' },
+  cardIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.bgInput, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+  cardLogo: { width: 24, height: 24, borderRadius: 12 },
+  cardName: { fontSize: 15, fontWeight: '600', color: COLORS.textPrimary },
+  cardType: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2 },
+  cardRight: { alignItems: 'flex-end' },
+  cardBalance: { fontSize: 14, fontWeight: 'bold', color: COLORS.green, marginBottom: 6 },
+  empty: { padding: 24, alignItems: 'center' },
+  emptyText: { color: COLORS.textSecondary },
 });

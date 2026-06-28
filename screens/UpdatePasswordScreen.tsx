@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TextInput, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LockKeyhole } from 'lucide-react-native';
+import { Lock, ArrowLeft } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../constants/theme';
 
 export default function UpdatePasswordScreen() {
   const [password, setPassword] = useState('');
@@ -11,126 +12,43 @@ export default function UpdatePasswordScreen() {
   const [loading, setLoading] = useState(false);
   const navigation = useNavigation();
 
-  async function updatePassword() {
-    if (password !== confirmPassword) {
-      Alert.alert('Validation Error', 'Passwords do not match!');
-      return;
-    }
-    if (password.length < 6) {
-      Alert.alert('Validation Error', 'Password must be at least 6 characters long.');
-      return;
-    }
-
+  const handleUpdate = async () => {
+    if (password !== confirmPassword) { Alert.alert('Error', 'Password tidak cocok'); return; }
+    if (password.length < 6) { Alert.alert('Error', 'Password minimal 6 karakter'); return; }
     setLoading(true);
-    const { error } = await supabase.auth.updateUser({
-      password: password,
-    });
-
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      Alert.alert('Success', 'Password has been successfully updated!');
-      navigation.navigate('Dashboard' as never); // Will navigate or reset state
-    }
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) Alert.alert('Error', error.message);
+    else { Alert.alert('Berhasil', 'Password berhasil diubah'); navigation.goBack(); }
     setLoading(false);
-  }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.headerContainer}>
-        <LockKeyhole size={48} color="#2563eb" />
-        <Text style={styles.title}>Update Password</Text>
-        <Text style={styles.subtitle}>Please enter your new password</Text>
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>New Password</Text>
-        <TextInput
-          style={styles.input}
-          onChangeText={(text) => setPassword(text)}
-          value={password}
-          secureTextEntry={true}
-          placeholder="New Password"
-          autoCapitalize={'none'}
-        />
-      </View>
-
-      <View style={styles.inputContainer}>
-        <Text style={styles.label}>Confirm New Password</Text>
-        <TextInput
-          style={styles.input}
-          onChangeText={(text) => setConfirmPassword(text)}
-          value={confirmPassword}
-          secureTextEntry={true}
-          placeholder="Confirm New Password"
-          autoCapitalize={'none'}
-        />
-      </View>
-
-      <TouchableOpacity 
-        style={[styles.button, loading && styles.buttonDisabled]} 
-        onPress={updatePassword} 
-        disabled={loading}
-      >
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Update Password</Text>}
+      <TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}>
+        <ArrowLeft size={24} color={COLORS.textSecondary} />
       </TouchableOpacity>
+      <View style={styles.content}>
+        <View style={styles.iconWrap}><Lock size={40} color={COLORS.purple} /></View>
+        <Text style={styles.title}>Ubah Password</Text>
+        <Text style={styles.subtitle}>Masukkan password baru Anda</Text>
+        <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="Password baru" placeholderTextColor={COLORS.textMuted} secureTextEntry autoCapitalize="none" />
+        <TextInput style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Konfirmasi password" placeholderTextColor={COLORS.textMuted} secureTextEntry autoCapitalize="none" />
+        <TouchableOpacity style={[styles.button, loading && { opacity: 0.6 }]} onPress={handleUpdate} disabled={loading}>
+          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Simpan Password</Text>}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 24,
-    backgroundColor: '#f8fafc',
-    justifyContent: 'center',
-  },
-  headerContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#0f172a',
-    marginTop: 16,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#64748b',
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  inputContainer: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 16,
-    borderRadius: 12,
-    fontSize: 16,
-  },
-  button: {
-    backgroundColor: '#2563eb',
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  buttonDisabled: {
-    backgroundColor: '#93c5fd',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: COLORS.bgPrimary },
+  back: { padding: 20 },
+  content: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  iconWrap: { width: 80, height: 80, borderRadius: 24, backgroundColor: COLORS.bgCard, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+  title: { fontSize: 24, fontWeight: 'bold', color: COLORS.textPrimary, marginBottom: 8 },
+  subtitle: { fontSize: 14, color: COLORS.textSecondary, textAlign: 'center', marginBottom: 32 },
+  input: { backgroundColor: COLORS.bgInput, borderWidth: 1, borderColor: COLORS.border, padding: 14, borderRadius: 12, fontSize: 16, color: COLORS.textPrimary, width: '100%', marginBottom: 16 },
+  button: { backgroundColor: COLORS.purple, padding: 16, borderRadius: 12, alignItems: 'center', width: '100%' },
+  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
