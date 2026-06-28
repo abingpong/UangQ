@@ -1,24 +1,19 @@
-import React from 'react';
-import { StyleSheet, View, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { StyleSheet, View, TouchableOpacity, Animated } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { Home, BarChart3, Mic, User } from 'lucide-react-native';
-import { COLORS } from '../constants/theme';
+import { Home, BarChart3, Plus, Minus } from 'lucide-react-native';
+import { useTheme } from '../context/ThemeContext';
 
 import HomeScreen from '../screens/HomeScreen';
 import ReportScreen from '../screens/ReportScreen';
-import ProfileScreen from '../screens/ProfileScreen';
 import VoiceInputScreen from '../screens/VoiceInputScreen';
 import AccountsScreen from '../screens/AccountsScreen';
 import TransactionsScreen from '../screens/TransactionsScreen';
-import InvestmentsScreen from '../screens/InvestmentsScreen';
-import InstallmentsScreen from '../screens/InstallmentsScreen';
-import UpdatePasswordScreen from '../screens/UpdatePasswordScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator();
-const ReportStack = createNativeStackNavigator();
-const ProfileStack = createNativeStackNavigator();
 
 function HomeStackScreen() {
   return (
@@ -26,42 +21,35 @@ function HomeStackScreen() {
       <HomeStack.Screen name="HomeMain" component={HomeScreen} />
       <HomeStack.Screen name="Accounts" component={AccountsScreen} />
       <HomeStack.Screen name="TransactionsList" component={TransactionsScreen} />
-      <HomeStack.Screen name="Investments" component={InvestmentsScreen} />
-      <HomeStack.Screen name="Installments" component={InstallmentsScreen} />
       <HomeStack.Screen name="VoiceInput" component={VoiceInputScreen} />
+      <HomeStack.Screen name="Settings" component={SettingsScreen} />
     </HomeStack.Navigator>
   );
 }
 
-function ReportStackScreen() {
-  return (
-    <ReportStack.Navigator screenOptions={{ headerShown: false }}>
-      <ReportStack.Screen name="ReportMain" component={ReportScreen} />
-    </ReportStack.Navigator>
-  );
-}
-
-function ProfileStackScreen() {
-  return (
-    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
-      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
-      <ProfileStack.Screen name="Accounts" component={AccountsScreen} />
-      <ProfileStack.Screen name="UpdatePassword" component={UpdatePasswordScreen} />
-    </ProfileStack.Navigator>
-  );
-}
-
-// Placeholder for center tab
 function DummyScreen() { return null; }
 
 export default function MainTabNavigator() {
+  const { colors } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: COLORS.tabActive,
-        tabBarInactiveTintColor: COLORS.tabInactive,
+        tabBarStyle: {
+          backgroundColor: colors.bgTabBar,
+          borderTopWidth: 0,
+          height: 70,
+          paddingBottom: 8,
+          paddingTop: 8,
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          elevation: 0,
+        },
+        tabBarActiveTintColor: colors.tabActive,
+        tabBarInactiveTintColor: colors.tabInactive,
         tabBarLabelStyle: styles.tabLabel,
       }}
     >
@@ -73,80 +61,75 @@ export default function MainTabNavigator() {
         }}
       />
       <Tab.Screen
-        name="Laporan"
-        component={ReportStackScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
-        }}
-      />
-      <Tab.Screen
-        name="Mic"
+        name="AddTx"
         component={DummyScreen}
         options={{
           tabBarLabel: () => null,
           tabBarIcon: () => null,
           tabBarButton: (props) => (
-            <MicTabButton {...props} />
+            <AnimatedTabButton {...props} colors={colors} />
           ),
         }}
         listeners={({ navigation }) => ({
           tabPress: (e) => {
             e.preventDefault();
-            navigation.navigate('Beranda', { screen: 'VoiceInput' });
+            navigation.navigate('Beranda', { screen: 'VoiceInput' }); // We reuse VoiceInput screen or TransactionsList for adding
           },
         })}
       />
       <Tab.Screen
-        name="Profil"
-        component={ProfileStackScreen}
+        name="Laporan"
+        component={ReportScreen}
         options={{
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <BarChart3 size={size} color={color} />,
         }}
       />
     </Tab.Navigator>
   );
 }
 
-function MicTabButton({ onPress }: any) {
+function AnimatedTabButton({ onPress, colors }: any) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+        Animated.timing(fadeAnim, { toValue: 0, duration: 1500, useNativeDriver: true })
+      ])
+    ).start();
+  }, [fadeAnim]);
+
   return (
-    <View style={styles.micContainer}>
-      <TouchableOpacity style={styles.micFab} onPress={onPress} activeOpacity={0.8}>
-        <Mic size={28} color="#fff" />
+    <View style={styles.centerContainer}>
+      <TouchableOpacity style={[styles.centerFab, { backgroundColor: colors.purple, shadowColor: colors.purple }]} onPress={onPress} activeOpacity={0.8}>
+        <Animated.View style={{ opacity: fadeAnim, position: 'absolute' }}>
+          <Plus size={28} color="#fff" />
+        </Animated.View>
+        <Animated.View style={{ opacity: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }), position: 'absolute' }}>
+          <Minus size={28} color="#fff" />
+        </Animated.View>
       </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: COLORS.bgTabBar,
-    borderTopWidth: 0,
-    height: 70,
-    paddingBottom: 8,
-    paddingTop: 8,
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    elevation: 0,
-  },
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
   },
-  micContainer: {
+  centerContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     top: -20,
   },
-  micFab: {
+  centerFab: {
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: COLORS.purple,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: COLORS.purple,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
